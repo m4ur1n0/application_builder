@@ -1,5 +1,19 @@
-import { getToken } from './auth';
-import type { ApiResponse, ContributionCreate, ContributionsResponse, FilesResponse } from './types';
+import { getToken, clearAuth } from './auth';
+import type {
+  ApiResponse,
+  Company,
+  CompanyCreate,
+  CompaniesResponse,
+  Contribution,
+  ContributionCreate,
+  ContributionsResponse,
+  FilesResponse,
+  User,
+  GenerateCoverLetterRequest,
+  GenerateCoverLetterResponse,
+  ScrapeJobRequest,
+  ScrapeJobResponse
+} from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
@@ -23,6 +37,15 @@ function getHeaders(includeAuth: boolean = true): HeadersInit {
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   try {
     if (!response.ok) {
+      // Handle 401 globally: clear auth state
+      if (response.status === 401) {
+        clearAuth();
+        return {
+          ok: false,
+          error: 'Unauthorized - please log in again',
+        };
+      }
+
       const errorText = await response.text();
       return {
         ok: false,
@@ -66,6 +89,112 @@ export async function consumeToken(token: string): Promise<ApiResponse<{ ok: tru
   try {
     const response = await fetch(buildUrl(`/auth/consume?token=${encodeURIComponent(token)}`), {
       method: 'GET',
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+export async function getMe(): Promise<ApiResponse<{ ok: true; user: User }>> {
+  try {
+    const response = await fetch(buildUrl('/auth/me'), {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+// Companies endpoints
+export async function createCompany(
+  company: CompanyCreate
+): Promise<ApiResponse<{ ok: true; company: Company }>> {
+  try {
+    const response = await fetch(buildUrl('/companies'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getHeaders(true),
+      },
+      body: JSON.stringify(company),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+export async function listCompanies(): Promise<ApiResponse<CompaniesResponse>> {
+  try {
+    const response = await fetch(buildUrl('/companies'), {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+export async function deleteCompany(companyId: string): Promise<ApiResponse<{ ok: true }>> {
+  try {
+    const response = await fetch(buildUrl(`/companies/${companyId}`), {
+      method: 'DELETE',
+      headers: getHeaders(true),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+export async function createCompanyContribution(
+  companyId: string,
+  contribution: Omit<ContributionCreate, 'company_id'>
+): Promise<ApiResponse<{ ok: true; contributionId: string }>> {
+  try {
+    const response = await fetch(buildUrl(`/companies/${companyId}/contributions`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getHeaders(true),
+      },
+      body: JSON.stringify(contribution),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+export async function listCompanyContributions(
+  companyId: string
+): Promise<ApiResponse<{ ok: true; items: Contribution[]; total: number }>> {
+  try {
+    const response = await fetch(buildUrl(`/companies/${companyId}/contributions`), {
+      method: 'GET',
+      headers: getHeaders(true),
     });
     return handleResponse(response);
   } catch (error) {
@@ -158,29 +287,58 @@ export async function deleteContribution(id: string): Promise<ApiResponse<{ ok: 
   }
 }
 
-// Files endpoint via proxy worker
+// Files endpoint via proxy worker (now proxied through our API route)
 export async function getFilesViaProxy(): Promise<ApiResponse<FilesResponse>> {
   try {
-    // TODO: Ensure environment variables are configured:
-    // - NEXT_PUBLIC_CLOUDFLARE_PROXY_BASE_URL
-    // - NEXT_PUBLIC_CLOUDFLARE_PROXY_INTERNAL_KEY
-    const proxyBaseUrl = process.env.CLOUDFLARE_PROXY_BASE_URL;
-    const internalKey = process.env.CLOUDFLARE_PROXY_INTERNAL_KEY;
-
-    if (!proxyBaseUrl || !internalKey) {
-      return {
-        ok: false,
-        error: 'Proxy configuration missing. Set NEXT_PUBLIC_CLOUDFLARE_PROXY_BASE_URL and NEXT_PUBLIC_CLOUDFLARE_PROXY_INTERNAL_KEY',
-      };
-    }
-
     const token = getToken();
-    const response = await fetch(`${proxyBaseUrl}/proxy/files`, {
+    const response = await fetch('/api/files', {
       method: 'GET',
       headers: {
-        'X-Internal-Key': internalKey,
         'Authorization': token ? `Bearer ${token}` : '',
       },
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+// Cover Letter generation endpoint
+export async function generateCoverLetter(
+  request: GenerateCoverLetterRequest
+): Promise<ApiResponse<GenerateCoverLetterResponse>> {
+  try {
+    const response = await fetch(buildUrl('/api/cover-letter/generate'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getHeaders(true),
+      },
+      body: JSON.stringify(request),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+// Job scraping endpoint
+export async function scrapeJobPosting(
+  url: string
+): Promise<ApiResponse<ScrapeJobResponse>> {
+  try {
+    const response = await fetch('/api/scrape-job', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url }),
     });
     return handleResponse(response);
   } catch (error) {

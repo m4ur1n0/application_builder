@@ -2,152 +2,206 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { listContributions } from '@/lib/api';
-import type { Contribution } from '@/lib/types';
-
-interface JobGroup {
-  job_title: string;
-  count: number;
-  mostRecent: string;
-}
+import { listCompanies, createCompany, deleteCompany } from '@/lib/api';
+import type { Company } from '@/lib/types';
+import { Button, Input, Card, Alert } from '@/components/ui';
 
 export default function ContributionsPage() {
   const router = useRouter();
-  const [jobGroups, setJobGroups] = useState<JobGroup[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [newJobTitle, setNewJobTitle] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    companyName: '',
+    position: '',
+  });
 
-  const fetchAndGroupContributions = async () => {
+  const fetchCompanies = async () => {
     setLoading(true);
     setError('');
 
-    // Fetch all contributions (use a large limit to get all)
-    const result = await listContributions(1000, 0);
+    const result = await listCompanies();
 
     if (result.ok && result.data) {
-      const contributions = result.data.items;
-
-      // Group by job_title
-      const groups = new Map<string, Contribution[]>();
-
-      contributions.forEach((contrib) => {
-        const jobTitle = contrib.job_title || 'Uncategorized';
-        if (!groups.has(jobTitle)) {
-          groups.set(jobTitle, []);
-        }
-        groups.get(jobTitle)!.push(contrib);
-      });
-
-      // Convert to JobGroup array
-      const groupsArray: JobGroup[] = Array.from(groups.entries()).map(([job_title, contribs]) => {
-        // Sort by created_at to find most recent
-        const sorted = [...contribs].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-
-        return {
-          job_title,
-          count: contribs.length,
-          mostRecent: sorted[0].created_at,
-        };
-      });
-
-      // Sort by most recent
-      groupsArray.sort((a, b) =>
-        new Date(b.mostRecent).getTime() - new Date(a.mostRecent).getTime()
-      );
-
-      setJobGroups(groupsArray);
+      setCompanies(result.data.companies);
     } else {
-      setError(result.error || 'Failed to fetch contributions');
+      setError(result.error || 'Failed to fetch companies');
     }
 
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchAndGroupContributions();
+    fetchCompanies();
   }, []);
 
-  const handleNavigateToJob = (jobTitle: string) => {
-    router.push(`/contributions/${encodeURIComponent(jobTitle)}`);
+  const handleCreateCompany = async () => {
+    if (!formData.companyName.trim() || !formData.position.trim()) {
+      alert('Company name and position are required');
+      return;
+    }
+
+    const result = await createCompany({
+      companyName: formData.companyName.trim(),
+      position: formData.position.trim(),
+    });
+
+    if (result.ok) {
+      setFormData({ companyName: '', position: '' });
+      setShowForm(false);
+      fetchCompanies();
+    } else {
+      alert(`Error: ${result.error}`);
+    }
   };
 
-  const handleNewJob = () => {
-    if (newJobTitle.trim()) {
-      router.push(`/contributions/${encodeURIComponent(newJobTitle.trim())}`);
+  const handleDeleteCompany = async (companyId: string, companyName: string) => {
+    if (!confirm(`Delete "${companyName}" and all its contributions?`)) return;
+
+    const result = await deleteCompany(companyId);
+    if (result.ok) {
+      fetchCompanies();
+    } else {
+      alert(`Error: ${result.error}`);
     }
+  };
+
+  const handleNavigateToCompany = (companyId: string) => {
+    router.push(`/contributions/${companyId}`);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Contributions by Job</h1>
-        <button
-          onClick={fetchAndGroupContributions}
-          className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
-        >
-          Refresh
-        </button>
-      </div>
-
-      {/* New Job Input */}
-      <div className="border rounded p-4 bg-gray-50">
-        <h2 className="font-semibold mb-2">Start New Job</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Companies & Contributions</h1>
+          <p className="text-gray-600 mt-1">Track your work experience and contributions</p>
+        </div>
         <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Enter job title (e.g., Software Engineer at Acme)"
-            value={newJobTitle}
-            onChange={(e) => setNewJobTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleNewJob()}
-            className="border p-2 flex-1"
-          />
-          <button
-            onClick={handleNewJob}
-            disabled={!newJobTitle.trim()}
-            className="bg-green-500 text-white px-4 py-2 rounded disabled:bg-gray-300"
+          <Button
+            onClick={fetchCompanies}
+            variant="secondary"
+            size="sm"
           >
-            Go
-          </button>
+            Refresh
+          </Button>
+          <Button
+            onClick={() => setShowForm(!showForm)}
+            variant={showForm ? 'secondary' : 'primary'}
+            size="sm"
+          >
+            {showForm ? 'Cancel' : 'Add Company'}
+          </Button>
         </div>
       </div>
+
+      {/* New Company Form */}
+      {showForm && (
+        <Card className="bg-gray-50">
+          <h2 className="text-lg font-semibold mb-4 text-gray-900">Add New Company</h2>
+          <div className="space-y-4">
+            <Input
+              label="Company Name"
+              type="text"
+              placeholder="e.g., Acme Corp"
+              value={formData.companyName}
+              onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+            />
+            <Input
+              label="Position"
+              type="text"
+              placeholder="e.g., Software Engineer"
+              value={formData.position}
+              onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+            />
+          </div>
+          <div className="mt-6 flex gap-2">
+            <Button
+              onClick={handleCreateCompany}
+              variant="success"
+            >
+              Create Company
+            </Button>
+            <Button
+              onClick={() => {
+                setShowForm(false);
+                setFormData({ companyName: '', position: '' });
+              }}
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Loading State */}
-      {loading && <p className="text-gray-500">Loading contributions...</p>}
-
-      {/* Error State */}
-      {error && (
-        <div className="border border-red-300 bg-red-50 p-4 rounded">
-          <p className="text-red-700">{error}</p>
+      {loading && (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
+          <p className="text-sm text-gray-600">Loading companies...</p>
         </div>
       )}
 
-      {/* Job Groups List */}
-      {!loading && !error && jobGroups.length === 0 && (
-        <p className="text-gray-500">
-          No contributions yet. Create one by entering a job title above.
-        </p>
+      {/* Error State */}
+      {error && <Alert variant="error">{error}</Alert>}
+
+      {/* Empty State */}
+      {!loading && !error && companies.length === 0 && (
+        <Card className="text-center py-12">
+          <div className="text-gray-400 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No companies yet</h3>
+          <p className="text-gray-600 mb-6">
+            Get started by adding your first company and tracking contributions.
+          </p>
+          <Button
+            onClick={() => setShowForm(true)}
+            variant="primary"
+          >
+            Add Company
+          </Button>
+        </Card>
       )}
 
-      {!loading && jobGroups.length > 0 && (
-        <div className="space-y-3">
-          {jobGroups.map((group) => (
-            <div
-              key={group.job_title}
-              onClick={() => handleNavigateToJob(group.job_title)}
-              className="border rounded p-4 hover:bg-gray-50 cursor-pointer transition"
+      {/* Companies List */}
+      {!loading && companies.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {companies.map((company) => (
+            <Card
+              key={company.company_id}
+              className="hover:shadow-lg transition-shadow cursor-pointer group"
+              onClick={() => handleNavigateToCompany(company.company_id)}
             >
-              <h3 className="font-semibold text-lg">{group.job_title}</h3>
-              <div className="text-sm text-gray-600 mt-1">
-                <span>{group.count} contribution{group.count !== 1 ? 's' : ''}</span>
-                <span className="mx-2">•</span>
-                <span>
-                  Last updated: {new Date(group.mostRecent).toLocaleDateString()}
-                </span>
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg text-gray-900 group-hover:text-indigo-600 transition-colors">
+                    {company.company_name}
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">{company.position}</p>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {new Date(company.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteCompany(company.company_id, company.company_name);
+                  }}
+                  variant="danger"
+                  size="sm"
+                >
+                  Delete
+                </Button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
