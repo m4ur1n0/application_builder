@@ -49,3 +49,6 @@ next-env.d.ts
 
 *.md
 !README.md
+
+lib/cloudflare
+lib/cloudflare/*
