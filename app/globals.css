@@ -1,8 +1,34 @@
 @import "tailwindcss";
 
+/**
+ * Signal & Static Design System
+ *
+ * Palette:
+ * - Base: Warm stone grays for subtle, calm surfaces
+ * - Accent: Muted cyan (cyan-600) for primary actions and signals
+ * - Text: Deep stone for readability
+ *
+ * Motifs:
+ * - Signal rulers: Thin dividers with micro-labels
+ * - Status dots: Colored indicators with labels
+ * - Telemetry rows: Muted metadata under headings
+ * - Corner ticks: Subtle L-shaped borders on key surfaces
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafaf9; /* stone-50 - warm neutral */
+  --foreground: #1c1917; /* stone-900 - deep charcoal */
+  --surface: #ffffff; /* white for elevated panels */
+  --surface-muted: #f5f5f4; /* stone-100 for secondary surfaces */
+  --border: #e7e5e4; /* stone-200 for thin rules */
+  --border-strong: #d6d3d1; /* stone-300 for emphasis */
+  --accent: #0891b2; /* cyan-600 - muted teal signal */
+  --accent-hover: #0e7490; /* cyan-700 */
+  --accent-light: #06b6d4; /* cyan-500 */
+  --text-primary: #1c1917; /* stone-900 */
+  --text-secondary: #57534e; /* stone-600 */
+  --text-muted: #78716c; /* stone-500 */
+  --text-subtle: #a8a29e; /* stone-400 */
 }
 
 @theme inline {
@@ -10,13 +36,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  /* :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  } */
 }
 
 body {
@@ -31,24 +50,164 @@ body {
   box-sizing: border-box;
 }
 
-/* Smooth scrolling */
 html {
   scroll-behavior: smooth;
 }
 
-/* Focus visible for better accessibility */
+/* Selection styling */
+::selection {
+  background: #06b6d433; /* accent-light with opacity */
+  color: var(--text-primary);
+}
+
+/* Focus visible - muted cyan accent */
 *:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 /* Radio button styling */
-input[type="radio"] {
-  accent-color: #6366f1;
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
-input[type="radio"]:focus-visible {
-  outline: 2px solid #6366f1;
+input[type="radio"]:focus-visible,
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Signal & Static Signature Motifs */
+
+/* Signal ruler - thin horizontal line with optional tick marks */
+.signal-ruler {
+  position: relative;
+  height: 1px;
+  background: var(--border);
+}
+
+.signal-ruler::after {
+  content: attr(data-label);
+  position: absolute;
+  right: 0;
+  top: -8px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+/* Status dot indicator */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.status-dot-active {
+  background: var(--accent);
+}
+
+.status-dot-idle {
+  background: var(--text-subtle);
+}
+
+.status-dot-success {
+  background: #10b981; /* emerald-500 */
+}
+
+.status-dot-error {
+  background: #ef4444; /* red-500 */
+}
+
+/* Telemetry row - muted metadata */
+.telemetry-row {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.telemetry-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Corner ticks - subtle L-shaped borders */
+.corner-ticks {
+  position: relative;
+}
+
+.corner-ticks::before,
+.corner-ticks::after {
+  content: '';
+  position: absolute;
+  border: 1px solid var(--border-strong);
+}
+
+.corner-ticks::before {
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.corner-ticks::after {
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-left: none;
+  border-top: none;
+}
+
+/* Document surface - for cover letter editor */
+.document-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Micro label styling */
+.micro-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+/* ContentEditable placeholder */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-subtle);
+  font-style: italic;
+  pointer-events: none;
+}
+
+[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
+/* Document editor paragraph spacing */
+[contenteditable] p {
+  margin-bottom: 1em;
+}
+
+[contenteditable] p:last-child {
+  margin-bottom: 0;
 }

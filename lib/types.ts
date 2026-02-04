@@ -31,6 +31,7 @@ export interface Contribution {
 
 export interface ContributionCreate {
   title: string;
+  company_id?: string; // Required for POST /contributions, not needed for POST /companies/{id}/contributions
   context?: string;
   actions?: string;
   impact?: string;

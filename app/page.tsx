@@ -24,15 +24,30 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-stone-50">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome</h1>
-            <p className="text-gray-600">
-              Sign in to continue to your application builder
+        {/* Signal & Static: Corner ticks motif on auth card */}
+        <div className="bg-white border border-stone-300 p-8 corner-ticks">
+          {/* Telemetry row at top */}
+          <div className="telemetry-row mb-8 pb-3 border-b border-stone-200">
+            <div className="telemetry-item">
+              <span className="status-dot status-dot-active" />
+              <span>AUTH</span>
+            </div>
+            <div className="telemetry-item">
+              <span>SECURE</span>
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h1 className="text-2xl font-medium text-stone-900 mb-2">
+              Authentication Required
+            </h1>
+            <p className="text-sm text-stone-600">
+              Sign in with your Google account to access the application builder
             </p>
           </div>
+
           <Button
             onClick={handleGoogleLogin}
             variant="primary"
@@ -47,9 +62,13 @@ export default function AuthPage() {
             </svg>
             Continue with Google
           </Button>
+
+          {/* Signal ruler at bottom */}
+          <div className="signal-ruler mt-8" data-label="OAuth 2.0" />
         </div>
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Secure authentication powered by Google OAuth
+
+        <p className="text-center text-xs text-stone-500 mt-6 font-mono">
+          SECURE_AUTH_v1.0 // GOOGLE_OAUTH
         </p>
       </div>
     </div>

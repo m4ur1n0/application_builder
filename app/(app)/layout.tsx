@@ -1,12 +1,13 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { clearAuth } from '@/lib/auth';
 import { AuthGate, useAuth } from '@/components/AuthGate';
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
 
   const handleLogout = () => {
@@ -14,49 +15,72 @@ function AppContent({ children }: { children: React.ReactNode }) {
     router.push('/');
   };
 
+  const navItems = [
+    { href: '/cover-letter', label: 'Cover Letter' },
+    { href: '/contributions', label: 'Contributions' },
+    { href: '/account', label: 'Account' },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between max-w-7xl mx-auto px-6 py-4">
+    <div className="min-h-screen flex flex-col">
+      {/* Signal & Static: Technical, minimal navigation */}
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-10">
+        <div className="flex items-center justify-between max-w-7xl mx-auto px-6 py-3">
           <div className="flex items-center gap-8">
-            <div className="font-semibold text-lg text-gray-900">
-              Application Builder
+            {/* Wordmark with subtle mono font styling */}
+            <div className="font-mono text-sm font-medium text-stone-900 tracking-tight">
+              APPLICATION_BUILDER
             </div>
+
+            {/* Navigation links with status dot indicator */}
             <div className="flex gap-1">
-              <Link
-                href="/cover-letter"
-                className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-              >
-                Cover Letter
-              </Link>
-              <Link
-                href="/contributions"
-                className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-              >
-                Contributions
-              </Link>
-              <Link
-                href="/account"
-                className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-              >
-                Account
-              </Link>
+              {navItems.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`
+                      px-3 py-1.5 text-xs font-medium tracking-wide uppercase transition-all
+                      ${isActive
+                        ? 'text-cyan-700 bg-cyan-50'
+                        : 'text-stone-600 hover:text-cyan-600 hover:bg-stone-50'
+                      }
+                    `}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {isActive && <span className="status-dot status-dot-active" />}
+                      {item.label}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
+
           <div className="flex items-center gap-4">
+            {/* User email with telemetry styling */}
             {user && (
-              <span className="text-sm text-gray-600 hidden sm:inline">{user.email}</span>
+              <span className="text-xs text-stone-500 hidden sm:inline font-mono">
+                {user.email}
+              </span>
             )}
+
+            {/* Logout button */}
             <button
               onClick={handleLogout}
-              className="text-sm font-medium text-gray-700 hover:text-red-600 px-3 py-2 rounded-md hover:bg-red-50 transition-colors"
+              className="text-xs font-medium text-stone-600 hover:text-red-600 px-3 py-1.5 hover:bg-red-50 transition-all uppercase tracking-wide"
             >
               Logout
             </button>
           </div>
         </div>
       </nav>
-      <main className="flex-1 py-8 px-6 max-w-7xl mx-auto w-full">{children}</main>
+
+      {/* Main content with signal ruler at top */}
+      <main className="flex-1 py-8 px-6 max-w-7xl mx-auto w-full">
+        {children}
+      </main>
     </div>
   );
 }

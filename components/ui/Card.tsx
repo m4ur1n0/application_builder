@@ -1,4 +1,5 @@
 import { HTMLAttributes, forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'bordered' | 'elevated';
@@ -7,25 +8,36 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ variant = 'default', padding = 'md', className = '', children, ...props }, ref) => {
-    const baseStyles = 'bg-white rounded-lg transition-shadow duration-200';
+    // Signal & Static: Prefer thin borders over heavy shadows
+    const baseStyles = 'bg-white transition-all duration-150';
 
     const variantStyles = {
-      default: 'border border-gray-200 shadow-sm',
-      bordered: 'border border-gray-300',
-      elevated: 'shadow-md hover:shadow-lg'
+      // Default: subtle border only
+      default: 'border border-stone-200',
+
+      // Bordered: stronger border for emphasis
+      bordered: 'border border-stone-300',
+
+      // Elevated: subtle shadow with border (minimal use)
+      elevated: 'border border-stone-200 shadow-sm'
     };
 
     const paddingStyles = {
       none: '',
       sm: 'p-4',
-      md: 'p-6',
-      lg: 'p-8'
+      md: 'p-5',
+      lg: 'p-6'
     };
 
     return (
       <div
         ref={ref}
-        className={`${baseStyles} ${variantStyles[variant]} ${paddingStyles[padding]} ${className}`}
+        className={cn(
+          baseStyles,
+          variantStyles[variant],
+          paddingStyles[padding],
+          className
+        )}
         {...props}
       >
         {children}

@@ -1,4 +1,5 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
@@ -16,20 +17,30 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     disabled,
     ...props
   }, ref) => {
-    const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none';
+    // Signal & Static: Crisp, technical buttons with clear states
+    const baseStyles = 'inline-flex items-center justify-center font-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed';
 
     const variantStyles = {
-      primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 shadow-sm hover:shadow-md',
-      secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-indigo-500 shadow-sm hover:shadow',
-      danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm hover:shadow-md',
-      ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
-      success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500 shadow-sm hover:shadow-md'
+      // Primary: Cyan accent - the signal color
+      primary: 'bg-cyan-600 text-white border border-cyan-700 hover:bg-cyan-700 hover:border-cyan-800 focus:ring-cyan-500',
+
+      // Secondary: Neutral with thin border - technical feel
+      secondary: 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-50 hover:border-stone-400 focus:ring-stone-400',
+
+      // Danger: Red for destructive actions
+      danger: 'bg-red-600 text-white border border-red-700 hover:bg-red-700 hover:border-red-800 focus:ring-red-500',
+
+      // Ghost: Minimal, for tertiary actions
+      ghost: 'text-stone-600 hover:bg-stone-100 hover:text-stone-900 focus:ring-stone-300',
+
+      // Success: Emerald for positive actions
+      success: 'bg-emerald-600 text-white border border-emerald-700 hover:bg-emerald-700 hover:border-emerald-800 focus:ring-emerald-500'
     };
 
     const sizeStyles = {
-      sm: 'px-3 py-1.5 text-sm',
+      sm: 'px-3 py-1.5 text-xs tracking-wide',
       md: 'px-4 py-2 text-sm',
-      lg: 'px-6 py-3 text-base'
+      lg: 'px-5 py-2.5 text-base'
     };
 
     const widthStyles = fullWidth ? 'w-full' : '';
@@ -37,7 +48,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${widthStyles} ${className}`}
+        className={cn(
+          baseStyles,
+          variantStyles[variant],
+          sizeStyles[size],
+          widthStyles,
+          className
+        )}
         disabled={disabled}
         {...props}
       >
