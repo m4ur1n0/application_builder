@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { JSDOM } from 'jsdom';
+import * as cheerio from 'cheerio';
 
-// Force Node.js runtime for JSDOM compatibility
+// Force Node.js runtime
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -51,11 +51,9 @@ export async function POST(request: NextRequest) {
     }
 
     const html = await response.text();
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
+    const $ = cheerio.load(html);
 
-    const result = scrapeJobPosting(document, parsedUrl);
-    console.log(result, JSON.stringify(result))
+    const result = scrapeJobPosting($, parsedUrl);
 
     if (!result.descriptionText || result.descriptionText.length < 100) {
       return NextResponse.json(
@@ -80,20 +78,20 @@ export async function POST(request: NextRequest) {
 /**
  * Main scraping function that uses site-specific selectors and fallback heuristics
  */
-function scrapeJobPosting(document: Document, url: URL): ScrapeResult {
+function scrapeJobPosting($: cheerio.CheerioAPI, url: URL): ScrapeResult {
   const hostname = url.hostname.toLowerCase();
 
-  // Try site-specific extractors, but fallback if they fail
+  // Try site-specific extractors
   let result: ScrapeResult | null = null;
 
   if (hostname.includes('greenhouse')) {
-    result = scrapeGreenhouse(document);
+    result = scrapeGreenhouse($);
   } else if (hostname.includes('lever')) {
-    result = scrapeLever(document);
+    result = scrapeLever($);
   } else if (hostname.includes('ashby')) {
-    result = scrapeAshby(document);
+    result = scrapeAshby($);
   } else if (hostname.includes('workday')) {
-    result = scrapeWorkday(document);
+    result = scrapeWorkday($);
   }
 
   // If site-specific extraction got good content, return it
@@ -102,52 +100,33 @@ function scrapeJobPosting(document: Document, url: URL): ScrapeResult {
   }
 
   // Otherwise, use generic fallback
-  console.log('Site-specific extraction failed or yielded insufficient content, using fallback');
-  return scrapeGeneric(document, true);
+  console.log('Site-specific extraction failed, using fallback');
+  return scrapeGeneric($, true);
 }
 
 /**
  * Greenhouse-specific scraper
  */
-function scrapeGreenhouse(document: Document): ScrapeResult {
+function scrapeGreenhouse($: cheerio.CheerioAPI): ScrapeResult {
   console.log('Trying Greenhouse extraction');
 
-  // Try multiple title selectors
-  const title = document.querySelector('h1.app-title')?.textContent?.trim() ||
-                document.querySelector('.job-title')?.textContent?.trim() ||
-                document.querySelector('h1')?.textContent?.trim();
+  const title = $('h1.app-title').first().text().trim() ||
+                $('.job-title').first().text().trim() ||
+                $('h1').first().text().trim();
 
-  const company = document.querySelector('.company-name')?.textContent?.trim();
-  const location = document.querySelector('.location')?.textContent?.trim();
+  const company = $('.company-name').first().text().trim();
+  const location = $('.location').first().text().trim();
 
-  // Try to find the main content area
-  let contentContainer = document.querySelector('#content') ||
-                        document.querySelector('.content') ||
-                        document.querySelector('main') ||
-                        document.querySelector('[class*="job-post"]') ||
-                        document.querySelector('body');
+  // Find content container
+  const contentContainer = $('#content, .content, main, [class*="job-post"], body').first();
 
-  if (!contentContainer) {
-    return { descriptionText: '', usedFallback: false };
-  }
+  // Clone and remove unwanted elements
+  const $clone = contentContainer.clone();
+  $clone.find('form, #application_form, .application-form, [id*="apply"], [class*="apply-button"]').remove();
+  $clone.find('script, style, nav, header.site-header, footer').remove();
+  $clone.find('input[type="file"], input[name*="name"], input[name*="email"]').closest('*').remove();
 
-  // Clone to avoid modifying original
-  const clone = contentContainer.cloneNode(true) as Element;
-
-  // Remove application forms and unwanted sections
-  clone.querySelectorAll('form, #application_form, .application-form, [id*="apply"], [class*="apply-button"]').forEach(el => el.remove());
-  clone.querySelectorAll('script, style, nav, header.site-header, footer').forEach(el => el.remove());
-
-  // Remove elements that contain form inputs
-  clone.querySelectorAll('*').forEach(el => {
-    if (el.querySelector('input[type="file"]') ||
-        el.querySelector('input[name*="name"]') ||
-        el.querySelector('input[name*="email"]')) {
-      el.remove();
-    }
-  });
-
-  const descriptionText = extractTextFromElement(clone);
+  const descriptionText = extractText($clone);
 
   return {
     title,
@@ -161,32 +140,23 @@ function scrapeGreenhouse(document: Document): ScrapeResult {
 /**
  * Lever-specific scraper
  */
-function scrapeLever(document: Document): ScrapeResult {
+function scrapeLever($: cheerio.CheerioAPI): ScrapeResult {
   console.log('Trying Lever extraction');
 
-  const title = document.querySelector('.posting-headline h2')?.textContent?.trim() ||
-                document.querySelector('h2')?.textContent?.trim();
+  const title = $('.posting-headline h2').first().text().trim() ||
+                $('h2').first().text().trim();
 
-  const company = document.querySelector('.main-header-text-logo img')?.getAttribute('alt') ||
-                  document.querySelector('.company-name')?.textContent?.trim();
+  const company = $('.main-header-text-logo img').attr('alt') ||
+                  $('.company-name').first().text().trim();
 
-  const location = document.querySelector('.posting-categories .location')?.textContent?.trim();
+  const location = $('.posting-categories .location').first().text().trim();
 
-  const postingContent = document.querySelector('.posting') ||
-                        document.querySelector('.content') ||
-                        document.querySelector('main') ||
-                        document.querySelector('body');
+  const postingContent = $('.posting, .content, main, body').first();
+  const $clone = postingContent.clone();
 
-  if (!postingContent) {
-    return { descriptionText: '', usedFallback: false };
-  }
+  $clone.find('form, .application-form, script, style, nav, header, footer').remove();
 
-  const clone = postingContent.cloneNode(true) as Element;
-
-  // Remove forms and unwanted elements
-  clone.querySelectorAll('form, .application-form, script, style, nav, header, footer').forEach(el => el.remove());
-
-  const descriptionText = extractTextFromElement(clone);
+  const descriptionText = extractText($clone);
 
   return {
     title,
@@ -200,36 +170,24 @@ function scrapeLever(document: Document): ScrapeResult {
 /**
  * Ashby-specific scraper
  */
-function scrapeAshby(document: Document): ScrapeResult {
+function scrapeAshby($: cheerio.CheerioAPI): ScrapeResult {
   console.log('Trying Ashby extraction');
 
-  const title = document.querySelector('h1')?.textContent?.trim() ||
-                document.querySelector('h2')?.textContent?.trim();
+  const title = $('h1').first().text().trim() ||
+                $('h2').first().text().trim();
 
-  const company = document.querySelector('[class*="company"]')?.textContent?.trim();
-  const location = document.querySelector('[class*="location"]')?.textContent?.trim();
+  const company = $('[class*="company"]').first().text().trim();
+  const location = $('[class*="location"]').first().text().trim();
 
-  // Ashby uses React, so we need to be more aggressive
-  const mainContent = document.querySelector('main') ||
-                     document.querySelector('[role="main"]') ||
-                     document.querySelector('#root') ||
-                     document.querySelector('body');
+  const mainContent = $('main, [role="main"], #root, body').first();
+  const $clone = mainContent.clone();
 
-  if (!mainContent) {
-    return { descriptionText: '', usedFallback: false };
-  }
+  $clone.find('form, nav, header, footer, script, style, button[type="submit"]').remove();
+  $clone.find('[class*="apply"], [class*="Apply"], [class*="button"]').filter((_, el) => {
+    return $(el).text().toLowerCase().includes('apply');
+  }).remove();
 
-  const clone = mainContent.cloneNode(true) as Element;
-
-  // Remove forms, navigation, and unwanted sections
-  clone.querySelectorAll('form, nav, header, footer, script, style, button[type="submit"]').forEach(el => el.remove());
-  clone.querySelectorAll('[class*="apply"], [class*="Apply"], [class*="button"]').forEach(el => {
-    if (el.textContent?.toLowerCase().includes('apply')) {
-      el.remove();
-    }
-  });
-
-  const descriptionText = extractTextFromElement(clone);
+  const descriptionText = extractText($clone);
 
   return {
     title,
@@ -243,24 +201,18 @@ function scrapeAshby(document: Document): ScrapeResult {
 /**
  * Workday-specific scraper
  */
-function scrapeWorkday(document: Document): ScrapeResult {
+function scrapeWorkday($: cheerio.CheerioAPI): ScrapeResult {
   console.log('Trying Workday extraction');
 
-  const title = document.querySelector('h2[data-automation-id="jobPostingHeader"]')?.textContent?.trim() ||
-                document.querySelector('h1')?.textContent?.trim();
+  const title = $('h2[data-automation-id="jobPostingHeader"]').first().text().trim() ||
+                $('h1').first().text().trim();
 
-  const company = document.querySelector('[data-automation-id="company"]')?.textContent?.trim();
-  const location = document.querySelector('[data-automation-id="locations"]')?.textContent?.trim();
+  const company = $('[data-automation-id="company"]').first().text().trim();
+  const location = $('[data-automation-id="locations"]').first().text().trim();
 
-  const descriptionContainer = document.querySelector('[data-automation-id="jobPostingDescription"]') ||
-                               document.querySelector('.job-description') ||
-                               document.querySelector('main');
+  const descriptionContainer = $('[data-automation-id="jobPostingDescription"], .job-description, main').first();
 
-  if (!descriptionContainer) {
-    return { descriptionText: '', usedFallback: false };
-  }
-
-  const descriptionText = extractTextFromElement(descriptionContainer);
+  const descriptionText = extractText(descriptionContainer);
 
   return {
     title,
@@ -273,98 +225,75 @@ function scrapeWorkday(document: Document): ScrapeResult {
 
 /**
  * Generic heuristic-based scraper for unknown job boards
- * Uses smart content detection to find the job description
  */
-function scrapeGeneric(document: Document, usedFallback: boolean): ScrapeResult {
+function scrapeGeneric($: cheerio.CheerioAPI, usedFallback: boolean): ScrapeResult {
   console.log('Using generic extraction');
 
-  const title = document.querySelector('h1')?.textContent?.trim();
+  const title = $('h1').first().text().trim();
 
-  const company = document.querySelector('[property="og:site_name"]')?.getAttribute('content') ||
-                  document.querySelector('.company-name')?.textContent?.trim() ||
-                  document.querySelector('[class*="company"]')?.textContent?.trim();
+  const company = $('[property="og:site_name"]').attr('content') ||
+                  $('.company-name').first().text().trim() ||
+                  $('[class*="company"]').first().text().trim();
 
-  const location = document.querySelector('[itemprop="jobLocation"]')?.textContent?.trim() ||
-                   document.querySelector('.location')?.textContent?.trim() ||
-                   document.querySelector('[class*="location"]')?.textContent?.trim();
+  const location = $('[itemprop="jobLocation"]').first().text().trim() ||
+                   $('.location').first().text().trim() ||
+                   $('[class*="location"]').first().text().trim();
 
-  // Strategy: Find all potential content containers and score them
-  const allElements = Array.from(document.querySelectorAll('main, article, [role="main"], section, div'));
+  // Find best content container
+  const candidates: Array<{ element: cheerio.Cheerio<any>; text: string; score: number }> = [];
 
-  const candidates = allElements.map(el => {
-    const clone = el.cloneNode(true) as Element;
+  $('main, article, [role="main"], section, div').each((_, el) => {
+    const $el = $(el);
+    const $clone = $el.clone();
 
-    // Remove obvious non-content elements
-    clone.querySelectorAll('nav, header, footer, aside, script, style, form').forEach(n => n.remove());
-    clone.querySelectorAll('button, input, select, textarea').forEach(n => n.remove());
-    clone.querySelectorAll('[class*="nav"], [class*="header"], [class*="footer"], [class*="sidebar"]').forEach(n => n.remove());
+    // Remove unwanted elements
+    $clone.find('nav, header, footer, aside, script, style, form, button, input, select, textarea').remove();
+    $clone.find('[class*="nav"], [class*="header"], [class*="footer"], [class*="sidebar"]').remove();
 
-    // Remove elements that look like application sections
-    clone.querySelectorAll('*').forEach(node => {
-      const text = node.textContent?.toLowerCase() || '';
-      const classList = Array.from(node.classList || []).join(' ').toLowerCase();
+    // Remove application sections
+    $clone.find('*').filter((_: any, node: any) => {
+      const text = $(node).text().toLowerCase();
 
-      if (
-        text.includes('first name') ||
-        text.includes('last name') ||
-        text.includes('email address') ||
-        text.includes('resume/cv') ||
-        text.includes('cover letter') ||
-        text.includes('linkedin profile') ||
-        classList.includes('apply') ||
-        classList.includes('application') ||
-        classList.includes('submit')
-      ) {
-        // Only remove if it's a small section (likely a form)
-        if ((node.textContent?.length || 0) < 500) {
-          node.remove();
-        }
-      }
+      const isFormSection = text.includes('first name') ||
+                           text.includes('last name') ||
+                           text.includes('email address') ||
+                           text.includes('resume/cv') ||
+                           text.includes('cover letter');
 
-      // Remove job alerts, EEO statements
-      if (
-        text.includes('create job alert') ||
-        text.includes('sign up for alerts') ||
-        text.includes('equal opportunity employer') ||
-        text.includes('eeo is the law') ||
-        text.includes('powered by') ||
-        text.includes('share this job')
-      ) {
-        node.remove();
-      }
-    });
+      const isSmallSection = ($(node).text().length || 0) < 500;
 
-    const text = clone.textContent || '';
+      return isFormSection && isSmallSection;
+    }).remove();
+
+    // Remove job alerts, EEO statements
+    $clone.find('*').filter((_: any, node: any) => {
+      const text = $(node).text().toLowerCase();
+      return text.includes('create job alert') ||
+             text.includes('sign up for alerts') ||
+             text.includes('equal opportunity employer') ||
+             text.includes('eeo is the law') ||
+             text.includes('powered by') ||
+             text.includes('share this job');
+    }).remove();
+
+    const text = $clone.text();
     const textLength = text.trim().length;
-
-    // Count meaningful elements (p, li, h2, h3)
-    const meaningfulElements = clone.querySelectorAll('p, li, h2, h3, h4').length;
-
-    // Score based on text length and structure
+    const meaningfulElements = $clone.find('p, li, h2, h3, h4').length;
     const score = textLength * 0.7 + meaningfulElements * 50;
 
-    return {
-      element: el,
-      text,
-      textLength,
-      score,
-    };
+    candidates.push({ element: $el, text, score });
   });
 
-  // Sort by score and take the best
+  // Sort by score
   candidates.sort((a, b) => b.score - a.score);
 
-  // Try the top 3 candidates and pick the first one with substantial content
+  // Try top 3 candidates
   for (const candidate of candidates.slice(0, 3)) {
-    if (candidate.textLength > 200) {
-      console.log(`Selected candidate with ${candidate.textLength} chars, score: ${candidate.score}`);
+    if (candidate.text.trim().length > 200) {
+      const $clone = candidate.element.clone();
+      $clone.find('nav, header, footer, aside, script, style, form, button[type="submit"]').remove();
 
-      const clone = candidate.element.cloneNode(true) as Element;
-
-      // Final cleanup
-      clone.querySelectorAll('nav, header, footer, aside, script, style, form, button[type="submit"]').forEach(el => el.remove());
-
-      const descriptionText = extractTextFromElement(clone);
+      const descriptionText = extractText($clone);
       const cleaned = cleanText(descriptionText);
 
       if (cleaned.length > 200) {
@@ -379,34 +308,25 @@ function scrapeGeneric(document: Document, usedFallback: boolean): ScrapeResult 
     }
   }
 
-  // Final fallback: just grab all text from body, minimal filtering
-  console.log('Using final aggressive fallback - grabbing all body text');
+  // Final fallback: grab all body text
+  console.log('Using final aggressive fallback');
 
-  const body = document.querySelector('body');
-  if (body) {
-    const bodyClone = body.cloneNode(true) as Element;
+  const $body = $('body').clone();
+  $body.find('script, style, noscript, iframe, form, input, select, textarea, button').remove();
 
-    // Only remove the most essential non-content elements
-    bodyClone.querySelectorAll('script, style, noscript, iframe').forEach(el => el.remove());
+  const allText = extractText($body);
+  const cleaned = cleanText(allText);
 
-    // Remove obvious form elements (but keep the rest)
-    bodyClone.querySelectorAll('form, input, select, textarea, button').forEach(el => el.remove());
-
-    const allText = extractTextFromElement(bodyClone);
-    const cleaned = cleanText(allText);
-
-    if (cleaned.length > 100) {
-      return {
-        title,
-        company,
-        location,
-        descriptionText: cleaned,
-        usedFallback: true,
-      };
-    }
+  if (cleaned.length > 100) {
+    return {
+      title,
+      company,
+      location,
+      descriptionText: cleaned,
+      usedFallback: true,
+    };
   }
 
-  // If even that failed, return empty
   return {
     title,
     company,
@@ -417,81 +337,76 @@ function scrapeGeneric(document: Document, usedFallback: boolean): ScrapeResult 
 }
 
 /**
- * Extract text from an element, preserving structure with headings and lists
+ * Extract text from Cheerio element, preserving structure
  */
-function extractTextFromElement(element: Element): string {
+function extractText($element: cheerio.Cheerio<any>): string {
   const parts: string[] = [];
 
-  function walk(node: Node, depth: number = 0): void {
-    if (node.nodeType === 3) { // Text node
-      const text = node.textContent?.trim();
-      if (text) {
-        parts.push(text);
+  function walk($node: cheerio.Cheerio<any>): void {
+    $node.contents().each((_: any, el: any) => {
+      if (el.type === 'text') {
+        const text = (el.data || '').trim();
+        if (text) {
+          parts.push(text);
+        }
+        return;
       }
-      return;
-    }
 
-    if (node.nodeType !== 1) return; // Not an element
+      if (el.type !== 'tag') return;
 
-    const el = node as Element;
-    const tagName = el.tagName?.toLowerCase();
+      const $el = cheerio.load(el)('*').first();
+      const tagName = el.name?.toLowerCase();
 
-    // Skip unwanted elements
-    if (['script', 'style', 'svg', 'path'].includes(tagName)) {
-      return;
-    }
+      // Skip unwanted
+      if (['script', 'style', 'svg', 'path'].includes(tagName)) {
+        return;
+      }
 
-    // Headings - add with extra spacing
-    if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-      const text = el.textContent?.trim();
-      if (text && text.length > 1) {
-        parts.push('\n\n' + text);
+      // Headings
+      if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+        const text = $el.text().trim();
+        if (text && text.length > 1) {
+          parts.push('\n\n' + text + '\n');
+        }
+        return;
+      }
+
+      // Paragraphs
+      if (tagName === 'p') {
+        const text = $el.text().trim();
+        if (text) {
+          parts.push('\n' + text);
+        }
+        return;
+      }
+
+      // List items
+      if (tagName === 'li') {
+        const text = $el.text().trim();
+        if (text) {
+          parts.push('\n• ' + text);
+        }
+        return;
+      }
+
+      // Line breaks
+      if (tagName === 'br') {
         parts.push('\n');
+        return;
       }
-      return;
-    }
 
-    // Paragraphs
-    if (tagName === 'p') {
-      const text = el.textContent?.trim();
-      if (text) {
-        parts.push('\n' + text);
+      // Recurse for containers
+      if (['div', 'section', 'article'].includes(tagName)) {
+        walk($el);
+        return;
       }
-      return;
-    }
 
-    // List items
-    if (tagName === 'li') {
-      const text = el.textContent?.trim();
-      if (text) {
-        parts.push('\n• ' + text);
-      }
-      return;
-    }
-
-    // Line breaks
-    if (tagName === 'br') {
-      parts.push('\n');
-      return;
-    }
-
-    // Divs and sections - add spacing if they contain block content
-    if (['div', 'section', 'article'].includes(tagName)) {
-      // Recurse into children
-      for (const child of Array.from(el.childNodes)) {
-        walk(child, depth + 1);
-      }
-      return;
-    }
-
-    // For other elements, just recurse
-    for (const child of Array.from(node.childNodes)) {
-      walk(child, depth + 1);
-    }
+      // Recurse for others
+      walk($el);
+    });
   }
 
-  walk(element);
-
+  walk($element);
   return parts.join('');
 }
 
@@ -499,7 +414,6 @@ function extractTextFromElement(element: Element): string {
  * Clean and normalize extracted text
  */
 function cleanText(text: string): string {
-  // Remove excessive whitespace
   let cleaned = text
     .replace(/\t/g, ' ')
     .replace(/ {2,}/g, ' ')
@@ -507,26 +421,20 @@ function cleanText(text: string): string {
     .replace(/\n /g, '\n')
     .trim();
 
-  // Remove lines that are just navigation or UI elements
+  // Filter out UI chrome
   const lines = cleaned.split('\n');
   const filteredLines = lines.filter(line => {
     const lower = line.toLowerCase().trim();
-
-    // Remove very short lines that are likely UI chrome
     if (lower.length < 3) return false;
-
-    // Remove common navigation items
-    if (lower === 'home' || lower === 'careers' || lower === 'jobs' ||
-        lower === 'search' || lower === 'menu' || lower === 'close') {
+    if (['home', 'careers', 'jobs', 'search', 'menu', 'close'].includes(lower)) {
       return false;
     }
-
     return true;
   });
 
   cleaned = filteredLines.join('\n');
 
-  // Remove duplicate consecutive lines (common in footers)
+  // Remove duplicate consecutive lines
   const uniqueLines: string[] = [];
   let prevLine = '';
 
@@ -538,14 +446,11 @@ function cleanText(text: string): string {
     prevLine = normalized;
   }
 
-  cleaned = uniqueLines.join('\n');
-
-  // Final whitespace cleanup
-  cleaned = cleaned
+  cleaned = uniqueLines.join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  // Cap at reasonable size (60k chars)
+  // Cap at reasonable size
   if (cleaned.length > 60000) {
     cleaned = cleaned.substring(0, 60000) + '\n\n[Content truncated for length]';
   }
