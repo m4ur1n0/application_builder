@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 
+// Force Node.js runtime for JSDOM compatibility
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface ScrapeResult {
   title?: string;
   company?: string;

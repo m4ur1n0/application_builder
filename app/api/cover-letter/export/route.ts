@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
+// Force Node.js runtime for PDF processing
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface ExportRequestBody {
   coverLetterText: string;
   header: {
