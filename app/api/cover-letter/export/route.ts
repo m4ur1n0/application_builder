@@ -186,8 +186,8 @@ export async function POST(request: NextRequest) {
     // Generate final PDF bytes
     const mergedPdfBytes = await mergedPdf.save();
 
-    // Return PDF as download
-    return new NextResponse(mergedPdfBytes, {
+    // Return PDF as download (convert Uint8Array to Buffer for NextResponse)
+    return new NextResponse(Buffer.from(mergedPdfBytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
